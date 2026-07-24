@@ -21,6 +21,7 @@
 - **对话式修改**：识别确认、修订和取消意图，避免误写入尚未确认的方案。
 - **地图与天气**：接入高德地图及天气服务，为行程提供位置与出行参考。
 - **MCP 工具扩展**：支持 12306、搜索、酒店、机票等 Streamable HTTP MCP Server。
+- **上下文压缩（可选）**：通过 Headroom 代理自动压缩 AI 对话上下文，节省 10-35% Token。
 - **版本与冲突保护**：提供版本快照、乐观并发、幂等操作和锁定安排保护。
 - **日历导出**：将包含日期和时间的行程导出为日历事件。
 - **用户数据隔离**：所有服务端读写都根据可信用户身份校验数据归属。
@@ -32,7 +33,7 @@
 - **桌面端**：Electron 43、better-sqlite3
 - **样式与界面**：Tailwind CSS 4、Lucide React、React Markdown
 - **服务端与数据**：Node.js 22、PostgreSQL 18、Drizzle ORM
-- **AI 与外部服务**：OpenAI-compatible API、MCP（Streamable HTTP）、高德地图
+- **AI 与外部服务**：OpenAI-compatible API、MCP（Streamable HTTP）、高德地图、Headroom 上下文压缩
 - **校验与工程化**：Zod 4、ESLint 9、Node.js Test Runner
 - **部署**：Docker、Docker Compose
 
@@ -55,15 +56,18 @@
 
 ### Docker 部署
 
-#### 首次安装
+部署分为**标准模式**和**Headroom 模式**两种，前者不含上下文压缩，后者额外启用 Headroom 代理以节省 AI Token。
+
+#### 首次安装（通用步骤）
 
 ```bash
+# 1. 下载编排文件和环境变量模板
 curl -fsSLO \
   https://raw.githubusercontent.com/drfccv/lvji-travel/main/docker-compose.yml \
   https://raw.githubusercontent.com/drfccv/lvji-travel/main/.env.example
 cp .env.example .env
 
-# 生成随机数据库凭据和加密密钥并追加到 .env
+# 2. 生成随机数据库凭据和加密密钥
 node -e "
 const crypto = require('crypto');
 console.log('DB_USER=' + crypto.randomBytes(4).toString('hex'));
@@ -71,8 +75,24 @@ console.log('DB_PASS=' + crypto.randomBytes(12).toString('hex'));
 console.log('APP_ENCRYPTION_KEY=' + crypto.randomBytes(32).toString('base64'));
 " >> .env
 
-# 可选的 AI / MCP 等配置，参考下方"环境变量"表格继续编辑 .env
+# 3. 参考下方"环境变量"表格编辑 .env，填入 AI 和 MCP 密钥
+```
+
+#### 启动（选择以下一种方式）
+
+**标准模式（不含 Headroom）：**
+
+```bash
 docker compose up -d
+```
+
+**Headroom 模式（启用上下文压缩）：**
+
+```bash
+# 需先设置环境变量
+echo "HEADROOM_PROXY=http://headroom:8787/v1" >> .env
+# 附加 --profile headroom 启动
+docker compose --profile headroom up -d
 ```
 
 启动后访问 <http://127.0.0.1:4173>（可通过 `.env` 中的 `APP_PORT` 更改宿主机端口）。
@@ -129,28 +149,21 @@ pnpm start
 
 ## 环境变量
 
-所有配置均为可选项；未配置的上游能力会返回明确错误或保持不可用状态。
+所有配置均为可选项；未配置的上游能力会返回明确错误或保持不可用状态。服务地址类变量在代码中有默认值，通常无需填写。
 
 | 变量 | 用途 |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL 连接字符串，例如 `postgresql://user:password@127.0.0.1:5432/ai_trip_planner` |
 | `DATABASE_POOL_SIZE` | 可选；数据库连接池上限，默认 10 |
-| `APP_ENCRYPTION_KEY` | 使用 AES-GCM 加密保存 AI/MCP 凭证；生产环境保存密钥时必须配置高强度值 |
-| `AI_PROVIDER` | AI 服务商标识，默认使用 OpenAI-compatible 协议 |
-| `AI_BASE_URL` | OpenAI-compatible API 地址 |
-| `AI_API_KEY` | AI 服务密钥 |
-| `AI_MODEL` | 默认模型名称 |
+| `APP_ENCRYPTION_KEY` | AES-GCM 加密密钥，用于加密 AI/MCP 凭证；部署后请勿更改，否则已保存的密钥无法解密 |
+| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | AI 提供商兜底配置；页面设置中未保存时的默认值，数据库有值则优先使用 |
+| `HEADROOM_PROXY` | Headroom 上下文压缩代理地址，例如 `http://headroom:8787/v1`；留空则直连 AI |
 | `AMAP_WEB_SERVICE_KEY` | 高德 Web 服务端 Key |
-| `NEXT_PUBLIC_AMAP_JS_KEY` | 高德地图 JavaScript API Key |
-| `AMAP_JS_SECURITY_CODE` | 高德地图 JavaScript API 安全密钥 |
 | `UAPI_API_KEY` | UAPI Key；留空时使用可用的访客额度 |
-| `MCP_12306_URL` | 12306 MCP Server 地址 |
-| `MCP_12306_API_KEY` | 12306 MCP 凭证 |
-| `MCP_SEARXNG_URL` | SearXNG MCP Server 地址 |
-| `MCP_AMAP_URL` | 高德 MCP Server 地址 |
-| `MCP_TAVILY_URL` / `TAVILY_API_KEY` | Tavily MCP 地址和凭证 |
-| `MCP_DIDA_URL` / `MCP_DIDA_FLIGHT_URL` | RollingGo 酒店和机票 MCP 地址 |
-| `DIDA_API_KEY` / `ROLLINGGO_API_KEY` | RollingGo 兼容凭证 |
+| `MCP_12306_URL` / `MCP_12306_API_KEY` | 12306 MCP 地址和凭证（需自行部署服务端） |
+| `MCP_SEARXNG_URL` | SearXNG MCP 地址（需自行部署服务端） |
+| `TAVILY_API_KEY` | Tavily 搜索 API Key |
+| `DIDA_API_KEY` / `ROLLINGGO_API_KEY` | RollingGo 道旅凭证，二选一即可 |
 
 ## PostgreSQL
 

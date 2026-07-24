@@ -261,15 +261,28 @@ export async function runtime(userId: string) {
       .where(eq(aiSettings.userId, userId))
       .limit(1)
   )[0];
-  if (!row?.encryptedApiKey)
-    throw new Error("请先在设置中保存 AI 模型与 API Key");
-  return {
-    provider: row.provider,
-    model: row.model,
-    key: await decryptSecret(row.encryptedApiKey),
-    base: assertSafeMcpUrl(row.baseUrl).toString().replace(/\/$/, ""),
-    thinkingEnabled: row.thinkingEnabled,
-  };
+  const envBase = process.env.AI_BASE_URL;
+  const envKey = process.env.AI_API_KEY;
+  const envModel = process.env.AI_MODEL;
+  if (row?.encryptedApiKey) {
+    return {
+      provider: row.provider,
+      model: row.model,
+      key: await decryptSecret(row.encryptedApiKey),
+      base: assertSafeMcpUrl(row.baseUrl).toString().replace(/\/$/, ""),
+      thinkingEnabled: row.thinkingEnabled,
+    };
+  }
+  if (envBase && envKey && envModel) {
+    return {
+      provider: "openai-compatible",
+      model: envModel,
+      key: envKey,
+      base: assertSafeMcpUrl(envBase).toString().replace(/\/$/, ""),
+      thinkingEnabled: false,
+    };
+  }
+  throw new Error("请先在设置中保存 AI 模型与 API Key，或在环境变量中配置 AI_BASE_URL / AI_API_KEY / AI_MODEL");
 }
 const string = { type: "string" };
 const uuid = { type: "string", format: "uuid" };
@@ -475,17 +488,39 @@ export async function modelCall(
             ? { response_format: { type: "json_object" } }
             : {}),
       };
-      const send = (payload: Record<string, unknown>) =>
-        fetch(`${runtime.base}/chat/completions`, {
+      const send = (payload: Record<string, unknown>) => {
+        const proxyUrl = process.env.HEADROOM_PROXY?.replace(/\/+$/, "");
+        const actualBase = proxyUrl || runtime.base;
+        const headers: Record<string, string> = {
+          authorization: `Bearer ${runtime.key}`,
+          "content-type": "application/json",
+        };
+        if (proxyUrl) {
+          headers["x-headroom-base-url"] = new URL(runtime.base).origin;
+        }
+        const target = `${actualBase}/chat/completions`;
+        return fetch(target, {
           method: "POST",
           redirect: "manual",
           signal: controller.signal,
-          headers: {
+          headers,
+          body: JSON.stringify(payload),
+        }).catch((err) => {
+          if (!proxyUrl) throw err;
+          console.warn(`[HEADROOM] Proxy unreachable (${target}), falling back to direct`);
+          const fallbackHeaders: Record<string, string> = {
             authorization: `Bearer ${runtime.key}`,
             "content-type": "application/json",
-          },
-          body: JSON.stringify(payload),
+          };
+          return fetch(`${runtime.base}/chat/completions`, {
+            method: "POST",
+            redirect: "manual",
+            signal: controller.signal,
+            headers: fallbackHeaders,
+            body: JSON.stringify(payload),
+          });
         });
+      };
       let requestBody: Record<string, unknown> = body;
       let response = await send(requestBody);
       let compatibilityError =

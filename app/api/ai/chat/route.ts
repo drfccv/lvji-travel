@@ -27,7 +27,34 @@ function choice(payload: unknown) { return (payload as { choices?: Array<{ messa
 function contentText(content: ReturnType<typeof choice> extends infer T ? T : never) { const value = (content as { content?: string | null | Array<{ text?: string }> } | undefined)?.content; return typeof value === "string" ? value : Array.isArray(value) ? value.map(part => part.text || "").join("") : ""; }
 
 async function modelCall(base: string, key: string, model: string, messages: ChatMessage[], tools: unknown[], signal: AbortSignal, structured = false, reasoning: Record<string, unknown> = {}) {
-  const send = (jsonMode: boolean) => fetch(`${base}/chat/completions`, { method: "POST", redirect: "manual", signal, headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ model, messages, ...reasoning, ...(tools.length ? { tools, tool_choice: "auto" } : {}), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) }) });
+  const send = (jsonMode: boolean) => {
+    const proxyUrl = process.env.HEADROOM_PROXY?.replace(/\/+$/, "");
+    const actualBase = proxyUrl || base;
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${key}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    };
+    if (proxyUrl) {
+      headers["x-headroom-base-url"] = new URL(base).origin;
+    }
+    const body = JSON.stringify({ model, messages, ...reasoning, ...(tools.length ? { tools, tool_choice: "auto" } : {}), ...(jsonMode ? { response_format: { type: "json_object" } } : {}) });
+    const target = `${actualBase}/chat/completions`;
+    return fetch(target, {
+      method: "POST", redirect: "manual", signal, headers, body,
+    }).catch((err) => {
+      if (!proxyUrl) throw err;
+      console.warn(`[HEADROOM] Proxy unreachable (${target}), falling back to direct`);
+      const fallbackHeaders: Record<string, string> = {
+        authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      };
+      return fetch(`${base}/chat/completions`, {
+        method: "POST", redirect: "manual", signal, headers: fallbackHeaders, body,
+      });
+    });
+  };
   let response = await send(structured); if (structured && response.status === 400) response = await send(false);
   if (response.status >= 300 && response.status < 400) throw new Error("模型服务发生了不安全的重定向");
   if (response.status === 401 || response.status === 403) throw new Error("API Key 无效、模型无访问权限，或服务商配置不匹配");
@@ -49,8 +76,21 @@ export async function POST(request: Request) {
     const user = await requireRequestUser(request); const input = inputSchema.parse(await request.json()); const trip = await loadTrip(input.tripId);
     if (!trip || trip.userId !== user.id) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     const settings = (await getDb().select().from(aiSettings).where(eq(aiSettings.userId, user.id)).limit(1))[0];
-    if (!settings?.encryptedApiKey) return Response.json({ error: "请先在设置中保存 AI 模型与 API Key" }, { status: 400 });
-    const key = await decryptSecret(settings.encryptedApiKey); const base = assertSafeMcpUrl(settings.baseUrl).toString().replace(/\/$/, "");
+    const envBase = process.env.AI_BASE_URL;
+    const envKey = process.env.AI_API_KEY;
+    const envModel = process.env.AI_MODEL;
+    let key: string, base: string, model: string;
+    if (settings?.encryptedApiKey) {
+      key = await decryptSecret(settings.encryptedApiKey);
+      base = assertSafeMcpUrl(settings.baseUrl).toString().replace(/\/$/, "");
+      model = settings.model;
+    } else if (envBase && envKey && envModel) {
+      key = envKey;
+      base = assertSafeMcpUrl(envBase).toString().replace(/\/$/, "");
+      model = envModel;
+    } else {
+      return Response.json({ error: "请先在设置中保存 AI 模型与 API Key，或在环境变量中配置 AI_BASE_URL / AI_API_KEY / AI_MODEL" }, { status: 400 });
+    }
     const itinerary = trip.days.map(day => ({ dayId: day.id, date: day.date, title: day.title, items: day.items.map(item => ({ id: item.id, title: item.title, type: item.type, startTime: item.startTime, durationMinutes: item.durationMinutes, cost: item.cost, locked: item.locked, sourceType: item.sourceType })) }));
     const system = `你是“旅迹”的专业旅行规划助手。需要实时地点、路线、酒店、车票或网页信息时，优先调用提供的 MCP 工具；不要编造工具结果。工具调用结束后的最终回复必须是且只能是一个 JSON 对象：{"message":"中文说明","operations":[TripOperation]}。禁止 Markdown、代码围栏、注释、前后解释、连续多个 JSON、NaN 和 undefined。所有字符串内的换行必须转义。允许 add_item、remove_item、update_item、move_item、update_budget。add_item.item 必须包含有效 dayId、type、title、HH:mm 格式 startTime、durationMinutes、notes、cost、sourceType。notes 只写预约、集合点、同行人、交通衔接等行程执行信息；景点或餐厅的历史人文、特色和评价写入 metadata.introduction。使用 MCP 结果新增的项目 sourceType="mcp_verified"，否则为 "ai_generated"。可编辑、删除、移动现有未锁定项目；绝不改动 locked=true 项目。完整规划每天 2–4 项，最多 40 项操作。行程：${JSON.stringify({ title: trip.title, destination: trip.destination, startDate: trip.startDate, endDate: trip.endDate, currency: trip.currency, budgetTotal: trip.budgetTotal, constraints: trip.constraints, days: itinerary })}`;
     const mcp = input.useMcp ? await availableMcp(request) : [];

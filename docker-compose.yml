@@ -31,5 +31,10 @@ services:
       db:
         condition: service_healthy
 
+  headroom:
+    profiles: [headroom]
+    image: ghcr.io/chopratejas/headroom:latest
+    restart: unless-stopped
+
 volumes:
   pgdata:
