@@ -39,7 +39,7 @@
 
 ## 快速开始
 
-### 桌面客户端（推荐）
+### 一、本地运行（桌面客户端）
 
 > 基于 Electron 43 构建，内置 SQLite，无需 PostgreSQL 即可本地运行，配置在 `drfccv/electron-local` 分支。
 
@@ -54,31 +54,54 @@
 
 下载安装后首次启动会打开配置页面，填入 AI 和 MCP 密钥即可使用，无需额外搭建数据库。
 
-### Docker 部署
+### 二、Docker 部署
 
-部署分为**标准模式**和**Headroom 模式**两种，前者不含上下文压缩，后者额外启用 Headroom 代理以节省 AI Token。
+> 适合服务器部署，需安装 Docker 和 Docker Compose。镜像由 GitHub Actions 在每次推送代码到 `main` 时自动构建并推送至 GitHub Container Registry。
 
-#### 首次安装（通用步骤）
+#### 1. 首次安装
 
 ```bash
-# 1. 下载编排文件和环境变量模板
-curl -fsSLO \
-  https://raw.githubusercontent.com/drfccv/lvji-travel/main/docker-compose.yml \
-  https://raw.githubusercontent.com/drfccv/lvji-travel/main/.env.example
+# 下载编排文件和环境变量模板
+curl -fsSL \
+  -O https://raw.githubusercontent.com/drfccv/lvji-travel/main/docker-compose.yml \
+  -O https://raw.githubusercontent.com/drfccv/lvji-travel/main/.env.example
 cp .env.example .env
-
-# 2. 生成随机数据库凭据和加密密钥
-node -e "
-const crypto = require('crypto');
-console.log('DB_USER=' + crypto.randomBytes(4).toString('hex'));
-console.log('DB_PASS=' + crypto.randomBytes(12).toString('hex'));
-console.log('APP_ENCRYPTION_KEY=' + crypto.randomBytes(32).toString('base64'));
-" >> .env
-
-# 3. 参考下方"环境变量"表格编辑 .env，填入 AI 和 MCP 密钥
 ```
 
-#### 启动（选择以下一种方式）
+生成随机数据库凭据和加密密钥（按操作系统选择）：
+
+<details>
+<summary><b>Linux / macOS</b>（自带 openssl + sed，推荐）</summary>
+
+```bash
+sed -i "s/^DB_USER=$/DB_USER=$(openssl rand -hex 4)/" .env
+sed -i "s/^DB_PASS=$/DB_PASS=$(openssl rand -hex 12)/" .env
+sed -i "s/^APP_ENCRYPTION_KEY=$/APP_ENCRYPTION_KEY=$(openssl rand -base64 32)/" .env
+```
+
+</details>
+
+<details>
+<summary><b>Windows</b>（PowerShell）</summary>
+
+在 PowerShell 终端中逐行执行：
+
+```powershell
+$dbUser = -join ((48..57)+(97..102) | Get-Random -Count 8 | ForEach-Object { [char]$_ })
+$dbPass = -join ((48..57)+(97..102) | Get-Random -Count 24 | ForEach-Object { [char]$_ })
+$encKey = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }))
+(Get-Content .env) -replace "^DB_USER=$", "DB_USER=$dbUser" | Set-Content .env
+(Get-Content .env) -replace "^DB_PASS=$", "DB_PASS=$dbPass" | Set-Content .env
+(Get-Content .env) -replace "^APP_ENCRYPTION_KEY=$", "APP_ENCRYPTION_KEY=$encKey" | Set-Content .env
+```
+
+或用文本编辑器手动编辑 `.env` 中的 `DB_USER`、`DB_PASS`、`APP_ENCRYPTION_KEY` 为随机值。
+
+</details>
+
+#### 2. 启动服务
+
+部署分为**标准模式**和**Headroom 模式**两种，前者不含上下文压缩，后者额外启用 Headroom 代理以节省 AI Token。
 
 **标准模式（不含 Headroom）：**
 
@@ -88,26 +111,41 @@ docker compose up -d
 
 **Headroom 模式（启用上下文压缩）：**
 
+<details>
+<summary><b>Linux / macOS</b></summary>
+
 ```bash
-# 需先设置环境变量
-echo "HEADROOM_PROXY=http://headroom:8787/v1" >> .env
-# 附加 --profile headroom 启动
+sed -i "s|^HEADROOM_PROXY=$|HEADROOM_PROXY=http://headroom:8787/v1|" .env
 docker compose --profile headroom up -d
 ```
 
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+(Get-Content .env) -replace "^HEADROOM_PROXY=$", "HEADROOM_PROXY=http://headroom:8787/v1" | Set-Content .env
+docker compose --profile headroom up -d
+```
+
+</details>
+
 启动后访问 <http://127.0.0.1:4173>（可通过 `.env` 中的 `APP_PORT` 更改宿主机端口）。
 
-#### 更新编排文件到最新
+#### 3. 更新
+
+**更新编排文件到最新：**
 
 ```bash
 docker compose down
-curl -fsSLO \
-  https://raw.githubusercontent.com/drfccv/lvji-travel/main/docker-compose.yml \
-  https://raw.githubusercontent.com/drfccv/lvji-travel/main/.env.example
+curl -fsSL \
+  -O https://raw.githubusercontent.com/drfccv/lvji-travel/main/docker-compose.yml \
+  -O https://raw.githubusercontent.com/drfccv/lvji-travel/main/.env.example
 docker compose up -d
 ```
 
-#### 更新服务镜像到最新
+**更新服务镜像到最新：**
 
 ```bash
 docker compose down
@@ -115,14 +153,15 @@ docker compose pull
 docker compose up -d
 ```
 
-镜像由 GitHub Actions 在每次推送代码到 `main` 时自动构建并推送至 GitHub Container Registry。
+### 三、源码运行
 
-### 源码安装与启动
+> 适合本地开发和二次开发，需安装 Node.js 22.13+ 和 pnpm（推荐）。
 
 #### 环境要求
 
 - Node.js 22.13 或更高版本
 - pnpm（推荐）或 npm
+- PostgreSQL 18（需自行搭建并提供 `DATABASE_URL`）
 
 #### 安装与启动
 
@@ -131,21 +170,10 @@ git clone https://github.com/drfccv/lvji-travel.git
 cd lvji-travel
 pnpm install                # 安装依赖
 cp .env.example .env        # 复制环境变量模板，编辑填入 AI Key 等配置
-pnpm db:migrate             # 在 PostgreSQL 中创建表结构（需先配置 DATABASE_URL）
+pnpm db:push                # 在 PostgreSQL 中创建表结构（需先配置 DATABASE_URL）
 pnpm build                  # 构建生产版本
 pnpm start                  # 启动服务，访问 http://127.0.0.1:4173
 ```
-
-Windows PowerShell 可使用：
-
-```powershell
-Copy-Item .env.example .env
-pnpm db:migrate
-pnpm build
-pnpm start
-```
-
-启动后访问 <http://127.0.0.1:4173>。
 
 ## 环境变量
 
