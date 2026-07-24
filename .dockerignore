@@ -12,6 +12,6 @@ scripts
 tests
 *.md
 .DS_Store
-
-*.md
-.DS_Store
+coverage
+drizzle-pg
+*.tsbuildinfo
