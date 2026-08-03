@@ -6,22 +6,40 @@
 
 # 旅迹 · AI 旅行规划工作台
 
+<br/>
+
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Electron](https://img.shields.io/badge/Electron-43-47848F?logo=electron&logoColor=white)](https://www.electronjs.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com)
+
+[![在线 Demo](https://img.shields.io/badge/在线_Demo-GitHub_Pages-2ea44f)](https://drfccv.github.io/lvji-travel/)
+[![GitHub Pages 部署](https://github.com/drfccv/lvji-travel/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/drfccv/lvji-travel/actions/workflows/deploy-pages.yml)
+[![Docker 镜像构建](https://github.com/drfccv/lvji-travel/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/drfccv/lvji-travel/actions/workflows/docker-publish.yml)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white)](https://github.com/drfccv/lvji-travel/releases)
+[![macOS](https://img.shields.io/badge/macOS-333333?logo=apple&logoColor=white)](https://github.com/drfccv/lvji-travel/releases)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/drfccv/lvji-travel/releases)
+
 </div>
 
 一个以 AI 对话驱动的旅行规划 Web 应用。旅迹将目的地、日期、预算和偏好转化为可编辑的逐日行程，并通过地图、天气以及 MCP 外部服务补充真实旅行信息。
 
 **在线Demo：** [https://drfccv.github.io/lvji-travel/](https://drfccv.github.io/lvji-travel/)
 
-![旅迹首页截图](https://picui.ogmua.cn/s1/2026/07/21/6a5ee653883d9.webp)
+![旅迹首页截图](https://www.liuyuan.top/usr/uploads/2026/08/4078085558.png)
 
 ## 功能特性
 
 - **AI 行程规划**：根据目的地、日期、人数、预算和旅行偏好生成或调整方案。
 - **逐日行程管理**：管理景点、交通、住宿、用餐、时间和费用等安排。
 - **对话式修改**：识别确认、修订和取消意图，避免误写入尚未确认的方案。
-- **地图与天气**：接入高德地图及天气服务，为行程提供位置与出行参考。
-- **MCP 工具扩展**：支持 12306、搜索、酒店、机票等 Streamable HTTP MCP Server。
-- **上下文压缩（可选）**：通过 Headroom 代理自动压缩 AI 对话上下文，节省 10-35% Token。
+- **地图与天气**：通过内置 MCP 工具获取地点、公交路线与天气信息，为行程提供出行参考。
+- **MCP 工具扩展**：内置高德、Tavily、RollingGo 道旅等 MCP 服务预设，支持自定义地址与密钥，也可接入 12306、SearXNG 等自建服务。
+- **上下文压缩（可选）**：通过 [Headroom](https://github.com/headroomlabs-ai/headroom) 代理自动压缩 AI 对话上下文，节省 10-35% Token。
 - **版本与冲突保护**：提供版本快照、乐观并发、幂等操作和锁定安排保护。
 - **日历导出**：将包含日期和时间的行程导出为日历事件。
 - **用户数据隔离**：所有服务端读写都根据可信用户身份校验数据归属。
@@ -33,7 +51,7 @@
 - **桌面端**：Electron 43、better-sqlite3
 - **样式与界面**：Tailwind CSS 4、Lucide React、React Markdown
 - **服务端与数据**：Node.js 22、PostgreSQL 18、Drizzle ORM
-- **AI 与外部服务**：OpenAI-compatible API、MCP（Streamable HTTP）、高德地图、Headroom 上下文压缩
+- **AI 与外部服务**：OpenAI-compatible API、MCP（Streamable HTTP，内置高德 / Tavily / RollingGo 道旅预设，可接入 12306、SearXNG 等自建服务）、[Headroom](https://github.com/headroomlabs-ai/headroom) 上下文压缩
 - **校验与工程化**：Zod 4、ESLint 9、Node.js Test Runner
 - **部署**：Docker、Docker Compose
 
@@ -153,113 +171,46 @@ docker compose pull
 docker compose up -d
 ```
 
-### 三、源码运行
-
-> 适合本地开发和二次开发，需安装 Node.js 22.13+ 和 pnpm（推荐）。
-
-#### 环境要求
-
-- Node.js 22.13 或更高版本
-- pnpm（推荐）或 npm
-- PostgreSQL 18（需自行搭建并提供 `DATABASE_URL`）
-
-#### 安装与启动
-
-```bash
-git clone https://github.com/drfccv/lvji-travel.git
-cd lvji-travel
-pnpm install                # 安装依赖
-cp .env.example .env        # 复制环境变量模板，编辑填入 AI Key 等配置
-pnpm db:push                # 在 PostgreSQL 中创建表结构（需先配置 DATABASE_URL）
-pnpm build                  # 构建生产版本
-pnpm start                  # 启动服务，访问 http://127.0.0.1:4173
-```
-
 ## 环境变量
 
-所有配置均为可选项；未配置的上游能力会返回明确错误或保持不可用状态。服务地址类变量在代码中有默认值，通常无需填写。
+大部分配置（AI、MCP 密钥等）可在应用后台「设置」面板填写并持久化到数据库，无需环境变量。以下仅列出需要关注的：
 
 | 变量 | 用途 |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL 连接字符串，例如 `postgresql://user:password@127.0.0.1:5432/ai_trip_planner` |
-| `DATABASE_POOL_SIZE` | 可选；数据库连接池上限，默认 10 |
-| `APP_ENCRYPTION_KEY` | AES-GCM 加密密钥，用于加密 AI/MCP 凭证；部署后请勿更改，否则已保存的密钥无法解密 |
-| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | AI 提供商兜底配置；页面设置中未保存时的默认值，数据库有值则优先使用 |
-| `HEADROOM_PROXY` | Headroom 上下文压缩代理地址，例如 `http://headroom:8787/v1`；留空则直连 AI |
-| `AMAP_WEB_SERVICE_KEY` | 高德 Web 服务端 Key |
-| `UAPI_API_KEY` | UAPI Key；留空时使用可用的访客额度 |
-| `MCP_12306_URL` / `MCP_12306_API_KEY` | 12306 MCP 地址和凭证（需自行部署服务端） |
-| `MCP_SEARXNG_URL` | SearXNG MCP 地址（需自行部署服务端） |
-| `TAVILY_API_KEY` | Tavily 搜索 API Key |
-| `DIDA_API_KEY` / `ROLLINGGO_API_KEY` | RollingGo 道旅凭证，二选一即可 |
+| `DATABASE_URL` | PostgreSQL 连接字符串，如 `postgresql://user:password@127.0.0.1:5432/lvji` |
+| `APP_ENCRYPTION_KEY` | AES-GCM 加密密钥，用于加密 AI/MCP 凭证；部署后请勿更改 |
+| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | AI 提供商兜底配置（可选） |
+| `HEADROOM_PROXY` | Headroom 上下文压缩代理地址，如 `http://headroom:8787/v1`（可选） |
+| `UAPI_API_KEY` | 天气服务 Key（可选） |
+
+> 其余变量（`AMAP_WEB_SERVICE_KEY`、`TAVILY_API_KEY`、`MCP_12306_URL`、`MCP_SEARXNG_URL` 等）均可在后台「设置」中配置，完整清单见 `.env.example`。
 
 ## PostgreSQL
 
-生产环境使用 PostgreSQL，保存用户、行程、每日安排、地点、路线、AI 任务、MCP 配置、操作记录和版本快照。数据库结构定义位于 `db/schema.ts`。
+生产环境使用 PostgreSQL，保存用户、行程、安排、MCP 配置等数据。Docker 部署已内置 PostgreSQL 18，无需单独搭建。
 
-项目提供 Docker 编排（详见[快速开始](#docker-部署推荐)），可一键启动 PostgreSQL 18 和应用。镜像由 GitHub Actions 在每次推送代码到 `main` 分支时自动构建并推送至 GitHub Container Registry。
+## 推荐的开源 MCP 服务
 
-## MCP Gateway 与安全
+以下开源 MCP 服务可选用，通过 `MCP_12306_URL`、`MCP_SEARXNG_URL` 或后台「设置」接入：
 
-应用支持无认证、Bearer Token 和自定义 Authorization 三种 MCP 认证方式。MCP Gateway 会：
+| 服务 | 说明 | 项目 |
+| --- | --- | --- |
+| 12306 MCP | 官方 12306 实时数据（余票、车站、经停、中转换乘） | [drfccv/mcp-server-12306](https://github.com/drfccv/mcp-server-12306) |
+| SearXNG MCP | 私有网页搜索，支持任意 MCP 客户端 | [ihor-sokoliuk/mcp-searxng](https://github.com/ihor-sokoliuk/mcp-searxng) |
 
-- 只允许公开 HTTPS 目标；
-- 阻止回环、私网、链路本地和云元数据地址；
-- 限制重定向、请求超时和响应体积；
-- 仅在服务端解密并发送凭证；
-- 在列表接口中只返回密钥掩码。
+## 致谢
 
-仅使用无认证 MCP 时不需要设置 `APP_ENCRYPTION_KEY`，应用也不会发送 `Authorization` Header。
+本项目使用了以下开源项目，特此致谢：
 
-## 数据一致性
+| 项目 | 用途 | 许可证 |
+| --- | --- | --- |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | AI 对话上下文压缩代理（可选） | Apache 2.0 |
+| [Next.js](https://github.com/vercel/next.js) | 前端框架 | MIT |
+| [Electron](https://github.com/electron/electron) | 桌面客户端 | MIT |
+| [PostgreSQL](https://www.postgresql.org/) | 数据库 | PostgreSQL License |
+| [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm) | 数据库访问 | Apache 2.0 |
+| [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) | 样式框架 | MIT |
 
-- AI 与手工修改统一经过 `preview → apply` 流程。
-- 提交操作必须携带当前 `revision` 和 `idempotencyKey`。
-- 并发版本冲突返回 HTTP 409。
-- 锁定的安排不能被修改、移动或删除。
-- 重要修改会生成版本快照，支持回退。
+> 内置 MCP 预设（高德、Tavily、RollingGo 道旅）为**商业服务**，凭证由使用者自行申请；12306、SearXNG 为可选接入的开源服务，见[推荐的开源 MCP 服务](#推荐的开源-mcp-服务)。
 
-## 质量检查
-
-提交代码前建议运行：
-
-```bash
-pnpm test
-pnpm lint
-pnpm build
-```
-
-测试覆盖行程领域规则、计划分发、模型推理参数、日历导出、Markdown 处理和 MCP 安全策略。
-
-## 项目结构
-
-```text
-.
-├── app/                        # 页面、组件与 API 路由
-│   ├── api/
-│   │   ├── ai/                 # AI 对话、任务分发与管理 API
-│   │   ├── mcp/                # MCP 代理与配置 API
-│   │   ├── trips/              # 行程 CRUD API
-│   │   └── user/               # 用户相关 API
-│   ├── AiAssistant.tsx         # AI 对话组件
-│   ├── PlanningFields.tsx      # 行程规划字段组件
-│   └── SettingsPanel.tsx       # 设置面板
-├── db/                         # Drizzle Schema 与数据库入口
-│   └── schema.ts               # 全部表定义（用户、行程、安排、MCP 等）
-├── lib/                        # 核心业务逻辑
-│   ├── ai/                     # AI 规划、任务分发、意图识别
-│   ├── auth/                   # 用户认证
-│   ├── http/                   # HTTP 工具与错误处理
-│   ├── mcp/                    # MCP 注册、网关、安全与审计
-│   └── trips/                  # 行程序列化与操作规则
-├── public/                     # 静态资源
-├── scripts/                    # 构建与脚本工具
-├── tests/                      # 自动化测试
-├── docker-compose.yml          # Docker 编排（含 PostgreSQL）
-├── Dockerfile                  # 容器镜像构建
-├── drizzle.config.ts           # Drizzle Kit 配置
-├── next.config.ts              # Next.js 配置
-├── proxy.ts                    # 匿名用户代理中间件
-├── package.json
-└── tsconfig.json
-```
+更多依赖详见各项目声明文件。
