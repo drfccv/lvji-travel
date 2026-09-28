@@ -48,7 +48,6 @@ jobs:
             artifact_paths: |
               release/*.exe
               release/*.exe.blockmap
-              release/latest.yml
           - name: macOS Intel
             os: macos-latest
             arch: x64
@@ -57,7 +56,6 @@ jobs:
             artifact_paths: |
               release/*.dmg
               release/*.dmg.blockmap
-              release/latest-mac.yml
           - name: macOS Apple Silicon
             os: macos-latest
             arch: arm64
@@ -66,7 +64,6 @@ jobs:
             artifact_paths: |
               release/*.dmg
               release/*.dmg.blockmap
-              release/latest-mac.yml
           # Built on the oldest still-supported Ubuntu LTS so the bundled
           # better-sqlite3 native module and the Electron binary link against
           # an old enough glibc to run on all supported distributions.
@@ -79,7 +76,6 @@ jobs:
               release/*.AppImage
               release/*.deb
               release/*.blockmap
-              release/latest-linux.yml
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -89,8 +85,33 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          node -e 'const fs=require("fs");const v=process.env.GITHUB_REF_NAME.replace(/^v/,"");const p=JSON.parse(fs.readFileSync("package.json","utf8"));p.version=v;fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n");console.log("package.json version -> "+v)'
       - name: Rebuild SQLite for Electron
+        if: runner.os != 'Linux'
         run: pnpm exec electron-rebuild -f -w better-sqlite3 --arch=${{ matrix.arch }}
+      # Electron 43 ships V8 headers whose v8-primitive.h places a C++11
+      # [[deprecated]] attribute in front of a GNU attribute, which GCC <= 12
+      # cannot parse (electron/electron#53284). ubuntu-22.04 defaults to GCC 11,
+      # so build with clang instead of moving to a newer runner: staying on
+      # 22.04 keeps glibc (and libstdc++/GLIBCXX) old enough to run everywhere.
+      - name: Rebuild SQLite for Electron (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          cc_bin="$(command -v clang || command -v clang-15 || command -v clang-14 || true)"
+          cxx_bin="$(command -v clang++ || command -v clang++-15 || command -v clang++-14 || true)"
+          if [ -z "$cc_bin" ] || [ -z "$cxx_bin" ]; then
+            sudo apt-get update
+            sudo apt-get install -y clang
+            cc_bin="$(command -v clang)"
+            cxx_bin="$(command -v clang++)"
+          fi
+          echo "CC=$cc_bin CXX=$cxx_bin"
+          CC="$cc_bin" CXX="$cxx_bin" pnpm exec electron-rebuild -f -w better-sqlite3 --arch=${{ matrix.arch }}
       - run: pnpm desktop:build
       - name: Build installer
         run: pnpm exec electron-builder ${{ matrix.builder_args }} --publish never

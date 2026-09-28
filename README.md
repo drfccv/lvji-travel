@@ -120,16 +120,20 @@ Linux 产物按 AppImage 目录要求命名，不带 `linux` 字样（例如 `lv
 
 Linux 安装包固定使用 `ubuntu-22.04` runner 构建，以保证内置的 `better-sqlite3` 原生模块和 Electron 二进制链接到足够旧的 glibc；若改用更新的 runner，产物会在较旧的发行版上因 `GLIBC_x.xx not found` 而无法启动。AppImage 同时固定使用静态运行时（`toolsets.appimage`），不依赖宿主机的 `libfuse2`。
 
+Linux 上的 `better-sqlite3` 固定使用 `clang` 重编译。Electron 43 的 V8 头文件把 C++11 与 GNU 两种 attribute 混用在同一声明上（[electron#53284](https://github.com/electron/electron/issues/53284)），GCC 12 及更早版本无法解析，而 `ubuntu-22.04` 默认的 GCC 11 正好在此范围内。改用 clang 即可绕开该缺陷，同时仍链接系统 GCC 11 的 libstdc++，`GLIBCXX` 符号版本保持不变。
+
 ### 发布新版本
 
 推送 `v*` 标签即可全自动构建并发布，无需手动上传：
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
-`desktop-build.yml` 会先跑测试，再在三个平台上并行打包，最后由 `release` 任务把全部产物（含 `.blockmap` 与 `latest*.yml` 更新元数据）附加到对应的 GitHub Release。
+`desktop-build.yml` 会先跑测试，再在三个平台上并行打包，最后由 `release` 任务把全部产物（含 `.blockmap`）附加到对应的 GitHub Release。
+
+打包时会把标签里的版本号写入 `package.json`（推送 `v0.1.1` → `version: 0.1.1`），产物名因此始终与标签一致，无需手动改版本号。该步骤只在标签构建时生效，日常提交和 PR 仍使用仓库中记录的版本号。
 
 ## 技术架构
 
