@@ -141,11 +141,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist-artifacts/*.AppImage
-            dist-artifacts/*.deb
-            dist-artifacts/*.exe
-            dist-artifacts/*.dmg
-            dist-artifacts/*.blockmap
-            dist-artifacts/latest*.yml
+            dist-artifacts/**/*.AppImage
+            dist-artifacts/**/*.deb
+            dist-artifacts/**/*.exe
+            dist-artifacts/**/*.dmg
+            dist-artifacts/**/*.blockmap
           generate_release_notes: true
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
