@@ -93,25 +93,22 @@ jobs:
       - name: Rebuild SQLite for Electron
         if: runner.os != 'Linux'
         run: pnpm exec electron-rebuild -f -w better-sqlite3 --arch=${{ matrix.arch }}
-      # Electron 43 ships V8 headers whose v8-primitive.h places a C++11
-      # [[deprecated]] attribute in front of a GNU attribute, which GCC <= 12
-      # cannot parse (electron/electron#53284). ubuntu-22.04 defaults to GCC 11,
-      # so build with clang instead of moving to a newer runner: staying on
-      # 22.04 keeps glibc (and libstdc++/GLIBCXX) old enough to run everywhere.
-      - name: Rebuild SQLite for Electron (Linux)
+      # Electron 43's V8 headers defeat both of ubuntu-22.04's default compilers:
+      # v8-primitive.h mixes a C++11 attribute with a GNU one (rejected by GCC <= 12),
+      # and v8-source-location.h needs a builtin that clang <= 15 lacks. clang 18
+      # handles both, and links the system libstdc++-11, so glibc/GLIBCXX stay old.
+      - name: Rebuild SQLite for Electron (Linux, clang 18)
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          cc_bin="$(command -v clang || command -v clang-15 || command -v clang-14 || true)"
-          cxx_bin="$(command -v clang++ || command -v clang++-15 || command -v clang++-14 || true)"
-          if [ -z "$cc_bin" ] || [ -z "$cxx_bin" ]; then
-            sudo apt-get update
-            sudo apt-get install -y clang
-            cc_bin="$(command -v clang)"
-            cxx_bin="$(command -v clang++)"
-          fi
-          echo "CC=$cc_bin CXX=$cxx_bin"
-          CC="$cc_bin" CXX="$cxx_bin" pnpm exec electron-rebuild -f -w better-sqlite3 --arch=${{ matrix.arch }}
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang-18
+          CC=clang-18 CXX=clang++-18 \
+            pnpm exec electron-rebuild -f -w better-sqlite3 --arch=${{ matrix.arch }}
       - run: pnpm desktop:build
       - name: Build installer
         run: pnpm exec electron-builder ${{ matrix.builder_args }} --publish never
