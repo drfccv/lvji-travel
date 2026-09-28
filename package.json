@@ -119,6 +119,7 @@
       "category": "Utility",
       "maintainer": "drfccv <2713587802@qq.com>",
       "syncDesktopName": true,
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "target": [
         "AppImage",
         "deb"
@@ -128,6 +129,9 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
-    "npmRebuild": false
+    "npmRebuild": false,
+    "toolsets": {
+      "appimage": "1.0.3"
+    }
   }
 }

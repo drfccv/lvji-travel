@@ -107,10 +107,29 @@ pnpm desktop:package:linux
 编译产物位于 `dist/`，安装包位于 `release/`：
 
 ```text
-release\旅迹-<version>-<os>-<arch>.<ext>
+release\lvji-<version>-win-<arch>.exe               # Windows 安装程序
+release\lvji-<version>-win-<arch>-portable.exe      # Windows 免安装版
+release\lvji-<version>-mac-<arch>.dmg               # macOS
+release\lvji-<version>-x86_64.AppImage              # Linux
+release\lvji-<version>-amd64.deb                    # Debian / Ubuntu
 ```
 
+Linux 产物按 AppImage 目录要求命名，不带 `linux` 字样（例如 `lvji-0.1.0-x86_64.AppImage`）。
+
 `desktop:dev` 和本地打包命令会针对 Electron ABI 重新编译 `better-sqlite3`；`desktop:test` 会针对本机 Node.js ABI 重新编译。GitHub Actions 会在 Windows、macOS 和 Linux runner 上分别重编译原生模块并上传安装包，避免跨系统复用 `.node` 二进制。
+
+Linux 安装包固定使用 `ubuntu-22.04` runner 构建，以保证内置的 `better-sqlite3` 原生模块和 Electron 二进制链接到足够旧的 glibc；若改用更新的 runner，产物会在较旧的发行版上因 `GLIBC_x.xx not found` 而无法启动。AppImage 同时固定使用静态运行时（`toolsets.appimage`），不依赖宿主机的 `libfuse2`。
+
+### 发布新版本
+
+推送 `v*` 标签即可全自动构建并发布，无需手动上传：
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`desktop-build.yml` 会先跑测试，再在三个平台上并行打包，最后由 `release` 任务把全部产物（含 `.blockmap` 与 `latest*.yml` 更新元数据）附加到对应的 GitHub Release。
 
 ## 技术架构
 
